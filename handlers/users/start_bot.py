@@ -131,14 +131,35 @@ async def sorts(message: types.Message):
     await message.answer(emoji.emojize(":sparkles:") + " Всю основную информацию вы\nсможете найти в нашем канале",
                          reply_markup=kb_info)
 
+@dp.message_handler(commands=['unban'])
+async def handle_ban_command(msg: types.Message):
+    if msg.from_user.id in OFFICERS:
+        if not msg.get_args():
+            return await msg.reply("Пример: /unban имя")
+        try:
+            username = msg.get_args()
+        except (ValueError, TypeError):
+            return await msg.reply("Укажи ник пользователя / write username")
+        abuser_id = getIdByName(username)
+        if abuser_id == 0:
+            return await msg.reply("Пользователь не найден / User not found")
+        BANS.pop(abuser_id)
+        await bot.send_message(abuser_id, f"Вас разблокировали / you has been unbanned",
+                               reply_markup=types.ReplyKeyboardRemove())
+        await msg.reply(f"Пользователь {username} разблокирован")
+
 
 @dp.message_handler(commands=['ban'])
 async def handle_ban_command(msg: types.Message):
     if msg.from_user.id in OFFICERS:
+        if "ч" not in msg.get_args():
+            return await msg.reply("Пример: /ban 1ч имя")
         try:
             data = msg.get_args().split("ч ")
             username = data[1]
-            ban_time = data[0]
+            ban_time = int(data[0])
+            if ban_time < 1:
+                return await msg.reply("Укажите один или более часов")
         except (ValueError, TypeError):
             return await msg.reply("Укажи ник пользователя / write username")
         abuser_id = getIdByName(username)
@@ -146,7 +167,7 @@ async def handle_ban_command(msg: types.Message):
             return await msg.reply("Пользователь не найден / User not found")
         # if abuser_id in ADMINS_ID:
         # return await msg.reply("Администратора нельзя забанить! / Administrator can't be banned!")
-        BANS[abuser_id] = {"perf": time.perf_counter(), "ban_time": ban_time}
+        BANS[abuser_id] = {"perf": time.perf_counter(), "ban_time": ban_time*3600}
         register_ban_user(abuser_id)
         await bot.send_message(abuser_id, f"Вам дали бан / you has been banned",
                                reply_markup=types.ReplyKeyboardRemove())
@@ -158,10 +179,26 @@ async def start_bot(message: types.Message, state: FSMContext):
     if message.from_user.id in BANS:
         ban_time = int(BANS[message.from_user.id]['ban_time'])-(int(time.perf_counter()) - int(BANS[message.from_user.id]['perf']))
         if ban_time <= 0:
+            BANS.pop(message.from_user.id)
             await message.answer("Бан снят!")
-        await message.answer(
-            "Вы были забанены! До разбана: " + str(ban_time))
-        return
+            await message.answer(
+                emoji.emojize(":high_voltage:"),
+                reply_markup=user_btns)
+            return
+        hours: int = 0
+        minutes: int = 0
+        if ban_time / 3600 > 1:
+            hours = int(ban_time / 3600)
+        if ban_time / 60 > 1 > hours:
+            minutes = int(ban_time / 60)
+        if hours > 0:
+            return await message.answer(
+                "Вы были забанены!\nДо разбана: " + str(hours)+ " часов")
+        if minutes > 0:
+            return await message.answer(
+                "Вы были забанены!\nДо разбана: " + str(minutes)+ " минут")
+        return await message.answer(
+            "Вы были забанены!\nДо разбана: " + str(ban_time)+ " секунд")
     await message.answer(
         emoji.emojize(":high_voltage:"),
         reply_markup=user_btns)
